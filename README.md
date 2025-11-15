@@ -2,9 +2,10 @@
 Repository for CO456 Final Project. Implements a Forced Chess variant with XBoard interface.
 
 
-
+Perform once to set up virtual environment:
 python3 -m venv venv
 
+Then to activate it:
 MAC: source venv/bin/activate
 Windows: .\venv\Scripts\Activate.ps1
 
