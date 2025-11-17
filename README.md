@@ -10,3 +10,5 @@ MAC: source venv/bin/activate
 Windows: .\venv\Scripts\Activate.ps1
 
 pip install python-chess
+
+brew install xboard
