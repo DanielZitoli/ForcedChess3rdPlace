@@ -5,7 +5,7 @@ from minimax_engine import MinimaxEngine
 from evaluators import materialEvaluator
 
 """
-if xboard is downloaded we should be able to run a game against our engine with the command `xboard -fcp ./[this_file]` 
+if xboard is downloaded we should be able to run a game against our engine with the command `xboard -fcp [this_file]` 
 """
 
 if __name__ == "__main__":
