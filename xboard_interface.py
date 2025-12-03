@@ -67,9 +67,9 @@ class XBoardHandler():
             except:
                 return
 
-            ###legal = forcedCaptureLegalMoves(self.board)
-            ###if move not in legal:
-            ###    return
+            legal = forcedCaptureLegalMoves(self.board)
+            if move not in legal:
+                return
 
             self.board.push(move)
 
