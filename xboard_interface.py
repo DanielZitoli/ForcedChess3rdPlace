@@ -47,6 +47,7 @@ class XBoardHandler():
 
         elif cmd.startswith("protover"):
             print_flush("feature usermove=1 sigint=0 sigterm=0 done=1")
+            return
 
         elif cmd == "new":
             self.board.reset()
@@ -54,12 +55,14 @@ class XBoardHandler():
 
         elif cmd == "force":
             self.force_mode = True
+            return
 
         elif cmd == "go":
             self.force_mode = False
             move = self.engine.find_best_move(self.board)
             self.board.push(move)
             print_flush(f"move {move.uci()}")
+            return
 
         elif move_uci:
             try:
@@ -77,6 +80,8 @@ class XBoardHandler():
                 reply = self.engine.find_best_move(self.board)
                 self.board.push(reply)
                 print_flush(f"move {reply.uci()}")
+                return
 
         elif cmd in ("quit", "exit"):
             sys.exit(0)
+            return

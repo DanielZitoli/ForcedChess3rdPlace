@@ -21,7 +21,11 @@ class MinimaxEngine(ChessEngine):
         best_move = None
         best_value = -math.inf if board.turn == chess.WHITE else math.inf
 
-        for move in forcedCaptureLegalMoves(board):
+        moves = forcedCaptureLegalMoves(board)
+        if not moves:
+            moves = list(board.legal_moves)
+
+        for move in moves:
             board.push(move)
             if self.use_alphabeta:
                 value = self._alphabeta(board, depth - 1, -math.inf, math.inf, not board.turn)
@@ -40,16 +44,20 @@ class MinimaxEngine(ChessEngine):
         if depth == 0 or board.is_game_over():
             return self.evaluate(board)
 
+        moves = forcedCaptureLegalMoves(board)
+        if not moves:
+            moves = list(board.legal_moves)
+
         if maximizing:
             value = -math.inf
-            for move in board.legal_moves:
+            for move in moves:
                 board.push(move)
                 value = max(value, self._minimax(board, depth - 1, False))
                 board.pop()
             return value
         else:
             value = math.inf
-            for move in board.legal_moves:
+            for move in moves:
                 board.push(move)
                 value = min(value, self._minimax(board, depth - 1, True))
                 board.pop()
@@ -58,10 +66,14 @@ class MinimaxEngine(ChessEngine):
     def _alphabeta(self, board, depth, alpha, beta, maximizing):
         if depth == 0 or board.is_game_over():
             return self.evaluate(board)
+        
+        moves = forcedCaptureLegalMoves(board)
+        if not moves:
+            moves = list(board.legal_moves)
 
         if maximizing:
             value = -math.inf
-            for move in board.legal_moves:
+            for move in moves:
                 board.push(move)
                 value = max(value, self._alphabeta(board, depth - 1, alpha, beta, False))
                 board.pop()
@@ -71,7 +83,7 @@ class MinimaxEngine(ChessEngine):
             return value
         else:
             value = math.inf
-            for move in board.legal_moves:
+            for move in moves:
                 board.push(move)
                 value = min(value, self._alphabeta(board, depth - 1, alpha, beta, True))
                 board.pop()
