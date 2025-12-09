@@ -32,7 +32,7 @@ def chatEvaluator(board: chess.Board) -> float:
     # Material values (down-weighted; safety matters more)
     val = {
         chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3,
-        chess.ROOK: 5, chess.QUEEN: 9, chess.KING: 0
+        chess.ROOK: 5, chess.QUEEN: 9, chess.KING: 200
     }
 
     score = 0.0
