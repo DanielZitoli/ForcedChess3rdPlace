@@ -31,8 +31,8 @@ def chatEvaluator(board: chess.Board) -> float:
 
     # Material values (down-weighted; safety matters more)
     val = {
-        chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3,
-        chess.ROOK: 5, chess.QUEEN: 9, chess.KING: 200
+        chess.PAWN: 100, chess.KNIGHT: 320, chess.BISHOP: 330,
+        chess.ROOK: 500, chess.QUEEN: 900, chess.KING: 20000
     }
 
     score = 0.0
@@ -47,77 +47,99 @@ def chatEvaluator(board: chess.Board) -> float:
     # -----------------------------------------
     # 2. PIECE SAFETY / CAPTURE AVOIDANCE
     # -----------------------------------------
-    def attackers_of_color(square, color):
-      return board.attackers(color, square)
+    def attackers(color, sq):
+        return board.attackers(color, sq)
 
     for color, sign in [(chess.WHITE, +1), (chess.BLACK, -1)]:
-      opp = not color
+        opp = not color
 
-      for piece_type, my_val in val.items():
-        for sq in board.pieces(piece_type, color):
+        for pt, v in val.items():
+            for sq in board.pieces(pt, color):
+                opp_attackers = attackers(opp, sq)
+                if not opp_attackers:
+                    continue
 
-            # All opponent attackers on this piece
-            opp_attackers = list(attackers_of_color(sq, opp))
+                my_value = v
+                best_trade = -9999
 
-            if not opp_attackers:
-                continue  # no trade possible
+                for attacker_sq in opp_attackers:
+                    attacker_piece = board.piece_at(attacker_sq)
+                    attacker_value = val[attacker_piece.piece_type]
+                    trade_delta = attacker_value - my_value
+                    best_trade = max(best_trade, trade_delta)
 
-            # Value of MY piece being captured
-            victim_value = my_val
-
-            # For each attacker, compute trade delta
-            # attacker_value - victim_value
-            best_trade = None
-
-            for attacker_sq in opp_attackers:
-                attacker_piece = board.piece_at(attacker_sq)
-                attacker_value = val[attacker_piece.piece_type]
-
-                trade_delta = attacker_value - victim_value
-
-                if best_trade is None or trade_delta > best_trade:
-                    best_trade = trade_delta
-
-            # If best_trade > 0, this is a favorable trade for "color"
-            # Example: They capture your knight (3) with a rook (5): +2
-            score += sign * best_trade * 1.5
+                score += sign * best_trade * 0.5  # toned down
 
     # -----------------------------------------
-    # 4. WINNING / LOSING THE GAME
+    # 3. MOBILITY (huge for breaking draws)
     # -----------------------------------------
-
-    # If the game is over, assign terminal values
-    if board.is_checkmate():
-        if board.turn == chess.WHITE:
-            # white is checkmated → black wins
-            return -99999
-        else:
-            # black is checkmated → white wins
-            return +99999
-
-    if board.is_stalemate():
-        return 0  # or small bonus/penalty if desired
+    score += 5 * (len(list(board.legal_moves)) if board.turn == chess.WHITE else -len(list(board.legal_moves)))
 
     # -----------------------------------------
-    # Incentivize approaching checkmate
+    # 4. CENTER CONTROL
     # -----------------------------------------
-    # Give a bonus for checking the opponent
+    center = [chess.D4, chess.D5, chess.E4, chess.E5]
+    for sq in center:
+        if board.piece_at(sq):
+            piece = board.piece_at(sq)
+            bonus = 15
+            score += bonus if piece.color == chess.WHITE else -bonus
+    # -----------------------------------------
+    # 5. PASSED PAWNS
+    # -----------------------------------------
+    def is_passed(board, sq, color):
+        rank_dir = 1 if color == chess.WHITE else -1
+        file = chess.square_file(sq)
+        sq_rank = chess.square_rank(sq)
+        for r in range(sq_rank + rank_dir, 8 if color == chess.WHITE else -1, rank_dir):
+            for f in [file-1, file, file+1]:
+                if 0 <= f < 8:
+                    if board.piece_at(chess.square(f, r)) and \
+                       board.piece_at(chess.square(f, r)).piece_type == chess.PAWN and \
+                       board.piece_at(chess.square(f, r)).color != color:
+                        return False
+        return True
+
+    for color, sign in [(chess.WHITE, +1), (chess.BLACK, -1)]:
+        for sq in board.pieces(chess.PAWN, color):
+            if is_passed(board, sq, color):
+                rank = chess.square_rank(sq) if color == chess.WHITE else (7 - chess.square_rank(sq))
+                score += sign * (30 + 10 * rank)
+
+    # -----------------------------------------
+    # 6. KING SAFETY
+    # -----------------------------------------
+    wk = board.king(chess.WHITE)
+    bk = board.king(chess.BLACK)
+
+    if board.attackers(chess.BLACK, wk):
+        score -= 60
+    if board.attackers(chess.WHITE, bk):
+        score += 60
+
+    # -----------------------------------------
+    # 7. CHECK BONUS (fixed)
+    # -----------------------------------------
     if board.is_check():
-        if board.turn == chess.WHITE:
-            score += 50
+        # reward giving check, not being in check
+        if board.turn == chess.WHITE:     # white to move → white is checked
+            score -= 150
         else:
-            score -= 50
+            score += 150
+
 
     # -----------------------------------------
-    # Improve King Safety (simple but effective)
+    # 8. TERMINALS
     # -----------------------------------------
-    # Penalize your king being attacked
-    white_king_sq = board.king(chess.WHITE)
-    black_king_sq = board.king(chess.BLACK)
-
-    if board.attackers(chess.BLACK, white_king_sq):
-        score -= 40
-    if board.attackers(chess.WHITE, black_king_sq):
-        score += 40
+    if board.is_checkmate():
+        return +999999 if board.turn == chess.BLACK else -999999
+    if board.is_stalemate():
+        return -50  # avoid draws
+    
+    # -----------------------------------------
+    # 9. CONTEMPT FACTOR (AVOID EQUAL DRAWISH LINES)
+    # -----------------------------------------
+    contempt = 30
+    score += contempt if board.turn == chess.WHITE else -contempt
 
     return score
