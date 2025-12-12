@@ -1,13 +1,15 @@
 from random_engine import RandomEngine
 from minimax_engine import MinimaxEngine
-from evaluators import materialEvaluator, chatEvaluator
+from evaluators import materialEvaluator, REvaluator, REvaluator2
 from simulator import simulateGame, simulateTournament
 
 randomEngine = RandomEngine()
-chatEngine = MinimaxEngine(name="Chat evaluator engine", use_alphabeta=True, evaluator=chatEvaluator)
+REngine = MinimaxEngine(name="Chat evaluator engine", use_alphabeta=True, evaluator=REvaluator)
+REngine2 = MinimaxEngine(name="Chat evaluator engine", use_alphabeta=True, evaluator=REvaluator2)
 simpleMinimax = MinimaxEngine(name="Simple minimax", use_alphabeta=False, evaluator=materialEvaluator)
 alphaBetaMinimax = MinimaxEngine(name="Minimax with alpha-beta pruning", use_alphabeta=True, evaluator=materialEvaluator)
 
 #simulateGame(randomEngine, alphaBetaMinimax)
 #simulateGame(randomEngine, simpleMinimax)
-simulateTournament(chatEngine, alphaBetaMinimax, n=1)
+simulateTournament(chatEngine2, chatEngine, n=1)
+simulateTournament(chatEngine, chatEngine2, n=1)

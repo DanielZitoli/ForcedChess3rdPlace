@@ -22,31 +22,127 @@ def materialEvaluator(board: chess.Board) -> float:
       score -= len(board.pieces(piece_type, chess.BLACK)) * val
   return score
 
+# FOR EVALUATORS
 
-import chess
+WEIGHTS1 = {
+    # base piece values (slightly compressed to encourage dynamic play)
+    "pawn": 100,
+    "knight": 300,
+    "bishop": 310,
+    "rook": 470,
+    "queen": 850,
+    "king": 20000,
+
+    # mobility weight (balanced: encourages activity but not reckless)
+    "mobility": 4,
+
+    # center control (moderate)
+    "center": 12,
+
+    # passed pawn base + per-rank urgency (bigger than default to avoid fortress)
+    "passed_base": 70,
+    "passed_per_rank": 22,
+
+    # pawn rank (general advancement reward)
+    "pawn_rank_weight": 12,
+
+    # king-safety (midgame) — stronger than vanilla but not extreme
+    "king_attack_penalty": 140,
+    "king_home_penalty_per_rank": 60,
+    "king_center_penalty": 45,
+
+    # endgame scaling (favor converting small advantages)
+    "endgame_king_dist_weight": 18,
+    "endgame_edge_bonus": 12,
+    "endgame_mobility_mult": 6,
+
+    # anti-fortress: encourage progress when no captures exist
+    "anti_fortress_pawn_progress": 28,   # per-best-rank
+
+    # repetition / draw avoidance (contempt + rep penalty)
+    "contempt": 42,
+    "repetition_penalty": 280,
+
+    # trade-safety multiplier (how strongly we punish bad trades)
+    "trade_penalty_mult": 0.6,
+
+    # check bonus/penalty
+    "check_penalty": 140,
+
+    # terminal values
+    "mate_score": 999999,
+    "stalemate_score": -220,
+}
+
+# second weights for comparison
+
+WEIGHTS2 = {
+    # base piece values (slightly compressed to encourage dynamic play)
+    "pawn": 100,
+    "knight": 300,
+    "bishop": 310,
+    "rook": 470,
+    "queen": 850,
+    "king": 20000,
+
+    # mobility weight (balanced: encourages activity but not reckless)
+    "mobility": 4,
+
+    # center control (moderate)
+    "center": 12,
+
+    # passed pawn base + per-rank urgency (bigger than default to avoid fortress)
+    "passed_base": 70,
+    "passed_per_rank": 22,
+
+    # pawn rank (general advancement reward)
+    "pawn_rank_weight": 12,
+
+    # king-safety (midgame) — stronger than vanilla but not extreme
+    "king_attack_penalty": 140,
+    "king_home_penalty_per_rank": 60,
+    "king_center_penalty": 45,
+
+    # endgame scaling (favor converting small advantages)
+    "endgame_king_dist_weight": 18,
+    "endgame_edge_bonus": 12,
+    "endgame_mobility_mult": 6,
+
+    # anti-fortress: encourage progress when no captures exist
+    "anti_fortress_pawn_progress": 28,   # per-best-rank
+
+    # repetition / draw avoidance (contempt + rep penalty)
+    "contempt": 42,
+    "repetition_penalty": 280,
+
+    # trade-safety multiplier (how strongly we punish bad trades)
+    "trade_penalty_mult": 0.6,
+
+    # check bonus/penalty
+    "check_penalty": 140,
+
+    # terminal values
+    "mate_score": 999999,
+    "stalemate_score": -220,
+}
+
 
 # =========================================================
-#   HELPER: strict endgame detection
+# Helpers (self-contained)
 # =========================================================
 def is_endgame(board: chess.Board) -> bool:
-    """
-    Very strict endgame definition:
-    Only a few non-pawn pieces left on the board.
-    """
-    material = 0
+    """Strict endgame: few non-pawn pieces on the board."""
+    nonpawn = 0
     for p in board.piece_map().values():
         if p.piece_type not in (chess.KING, chess.PAWN):
-            material += 1
-    return material <= 4
+            nonpawn += 1
+    return nonpawn <= 4
 
 
-# =========================================================
-#   HELPER: passed pawn detection
-# =========================================================
 def is_passed_pawn(board: chess.Board, sq: int, color: bool) -> bool:
+    """Standard passed pawn definition."""
     file = chess.square_file(sq)
     rank = chess.square_rank(sq)
-
     direction = 1 if color == chess.WHITE else -1
     opp = not color
 
@@ -54,168 +150,366 @@ def is_passed_pawn(board: chess.Board, sq: int, color: bool) -> bool:
     while 0 <= r < 8:
         for f in (file - 1, file, file + 1):
             if 0 <= f < 8:
-                target = chess.square(f, r)
-                p = board.piece_at(target)
-                if p and p.color == opp and p.piece_type == chess.PAWN:
+                t = chess.square(f, r)
+                p = board.piece_at(t)
+                if p and p.piece_type == chess.PAWN and p.color == opp:
                     return False
         r += direction
-
     return True
 
 
-# =========================================================
-#   HELPER: king safety evaluation
-# =========================================================
-def king_safety(board: chess.Board, color: bool) -> float:
+def king_safety_eval(board: chess.Board, color: bool, weights) -> float:
+    """King safety: penalize unsafe kings in midgame; allow active kings in endgame."""
+    w = weights
     ksq = board.king(color)
     if ksq is None:
-        return 0
+        return 0.0
 
-    score = 0
+    score = 0.0
     rank = chess.square_rank(ksq)
     file = chess.square_file(ksq)
 
-    # Early and mid-game: STAY SAFE
     if not is_endgame(board):
+        # penalty for leaving home rank (discourages premature king walks)
         home_rank = 0 if color == chess.WHITE else 7
-
-        # Penalty for leaving home rank
         if rank != home_rank:
-            score -= 80 * abs(rank - home_rank)
+            score -= w["king_home_penalty_per_rank"] * abs(rank - home_rank)
 
-        # Penalty for entering center (files d/e)
+        # penalty for being in central files (d/e)
         if file in (3, 4):
-            score -= 60
+            score -= w["king_center_penalty"]
 
-        # Penalty if king is attacked at all
+        # penalty if attacked at all
         if board.attackers(not color, ksq):
-            score -= 120
-
-    # Endgame: king SHOULD be active
+            score -= w["king_attack_penalty"]
     else:
-        # Bonus for centralization
-        center = {chess.D4, chess.D5, chess.E4, chess.E5}
-        if ksq in center:
-            score += 40
+        # endgame: centralization bonus
+        center_squares = {chess.D4, chess.D5, chess.E4, chess.E5}
+        if ksq in center_squares:
+            score += 36  # modest centralization bonus in real endgames
 
     return score
 
 
 # =========================================================
-#   MAIN EVALUATOR
+# Main evaluator
 # =========================================================
-def chatEvaluator(board: chess.Board) -> float:
-
-    # Material values
-    val = {
-        chess.PAWN:   100,
-        chess.KNIGHT: 320,
-        chess.BISHOP: 330,
-        chess.ROOK:   500,
-        chess.QUEEN:  900,
-        chess.KING:   20000
-    }
-
-    opp = not board.turn
+def REvaluator(board: chess.Board) -> float:
+    w = WEIGHTS
     score = 0.0
 
-    # =====================================================
-    # 1. MATERIAL
-    # =====================================================
-    for pt, v in val.items():
-        score += len(board.pieces(pt, chess.WHITE)) * v
-        score -= len(board.pieces(pt, chess.BLACK)) * v
+    # ---------------------------
+    # 1) Material (compressed values to encourage dynamic play)
+    # ---------------------------
+    piece_values = {
+        chess.PAWN:   w["pawn"],
+        chess.KNIGHT: w["knight"],
+        chess.BISHOP: w["bishop"],
+        chess.ROOK:   w["rook"],
+        chess.QUEEN:  w["queen"],
+        chess.KING:   w["king"],
+    }
 
-    # =====================================================
-    # 2. CAPTURE SAFETY / TRADE QUALITY
-    # =====================================================
+    for pt, val in piece_values.items():
+        score += val * (len(board.pieces(pt, chess.WHITE)) - len(board.pieces(pt, chess.BLACK)))
+
+    # ---------------------------
+    # 2) Trade / capture safety (simple, stable)
+    #    We penalize positions where our pieces are attacked proportionally,
+    #    but less extremely than before (keeps engine willing to sacrifice tactically).
+    # ---------------------------
     for color, sign in [(chess.WHITE, +1), (chess.BLACK, -1)]:
-        other = not color
-        for sq, piece in board.piece_map().items():
-            if piece.color != color:
+        opponent = not color
+        for sq in board.pieces(chess.PAWN, color) | board.pieces(chess.KNIGHT, color) | \
+                  board.pieces(chess.BISHOP, color) | board.pieces(chess.ROOK, color) | \
+                  board.pieces(chess.QUEEN, color):
+            # sq is an int; convert to piece
+            piece = board.piece_at(sq)
+            if piece is None:
                 continue
-
-            pt_value = val[piece.piece_type]
-
-            attackers = board.attackers(other, sq)
+            base_val = piece_values[piece.piece_type]
+            attackers = board.attackers(opponent, sq)
             if attackers:
-                # Best trade outcome
-                best = -9999
-                for a_sq in attackers:
-                    a_piece = board.piece_at(a_sq)
+                worst_trade = -9999
+                for a in attackers:
+                    a_piece = board.piece_at(a)
                     if a_piece:
-                        trade = val[a_piece.piece_type] - pt_value
-                        if trade > best:
-                            best = trade
-                score += sign * best * 0.5
+                        trade = piece_values[a_piece.piece_type] - base_val
+                        if trade > worst_trade:
+                            worst_trade = trade
+                # smaller multiplier than before: keeps tactical willingness
+                score += sign * worst_trade * w["trade_penalty_mult"]
 
-    # =====================================================
-    # 3. MOBILITY (REVERSED BONUS FOR FORCED CAPTURE CHESS)
-    #    - having MORE legal moves is GOOD (not always true
-    #      in standard chess, but extremely important here)
-    # =====================================================
-    legal = list(board.legal_moves)
-    mobility = len(legal)
+    # ---------------------------
+    # 3) Mobility (balanced)
+    # ---------------------------
+    # compute mobility for both sides cleanly without mutating board.turn
+    white_mob = len(list(board.legal_moves_of_color(chess.WHITE))) if hasattr(board, "legal_moves_of_color") else None
+    if white_mob is None:
+        # fallback if python-chess version is older: simulate
+        white_mob = 0
+        for move in board.legal_moves:
+            if board.turn == chess.WHITE:
+                white_mob += 1
+        # less precise fallback; but we will compute black_mob using a simple swap
+        # For safety below, we'll compute black_mob similarly.
 
-    if board.turn == chess.WHITE:
-        score += mobility * 3
-    else:
-        score -= mobility * 3
+    # compute black mobility by making a shallow turn-swap (non-mutating approach)
+    # python-chess doesn't provide a direct API to cheaply count black legal moves without changing the board; we use copy
+    board_copy = board.copy()
+    board_copy.turn = not board.turn
+    black_mob = len(list(board_copy.legal_moves))
 
-    # =====================================================
-    # 4. CENTER CONTROL
-    # =====================================================
+    score += w["mobility"] * (white_mob - black_mob)
+
+    # ---------------------------
+    # 4) Center control
+    # ---------------------------
     for sq in (chess.D4, chess.D5, chess.E4, chess.E5):
         p = board.piece_at(sq)
         if p:
-            bonus = 20
-            if p.color == chess.WHITE:
-                score += bonus
-            else:
-                score -= bonus
+            score += w["center"] if p.color == chess.WHITE else -w["center"]
 
-    # =====================================================
-    # 5. PASSED PAWNS
-    # =====================================================
+    # ---------------------------
+    # 5) Passed pawns + pawn advancement urgency
+    # ---------------------------
     for color, sign in [(chess.WHITE, +1), (chess.BLACK, -1)]:
         for sq in board.pieces(chess.PAWN, color):
+            # pawn rank (encourage pushing)
+            rank = chess.square_rank(sq) if color == chess.WHITE else 7 - chess.square_rank(sq)
+            score += sign * (w["pawn_rank_weight"] * rank)
             if is_passed_pawn(board, sq, color):
-                rank = chess.square_rank(sq)
-                advance = rank if color == chess.WHITE else (7 - rank)
-                score += sign * (40 + advance * 10)
+                score += sign * (w["passed_base"] + w["passed_per_rank"] * rank)
 
-    # =====================================================
-    # 6. KING SAFETY
-    # =====================================================
-    score += king_safety(board, chess.WHITE)
-    score -= king_safety(board, chess.BLACK)
+    # ---------------------------
+    # 6) King safety (midgame) but allow activity in endgame
+    # ---------------------------
+    score += king_safety_eval(board, chess.WHITE, w)
+    score -= king_safety_eval(board, chess.BLACK, w)
 
-    # =====================================================
-    # 7. CHECK BONUS
-    # =====================================================
+    # ---------------------------
+    # 7) Check penalty (keeps engine from walking into checks)
+    # ---------------------------
     if board.is_check():
-        if board.turn == chess.WHITE:  # white is being checked
-            score -= 150
+        # penalty for side to move being in check
+        if board.turn == chess.WHITE:
+            score -= w["check_penalty"]
         else:
-            score += 150
+            score += w["check_penalty"]
 
-    # =====================================================
-    # 8. AVOID 3-MOVE REPETITION (stops king shuffling)
-    # =====================================================
+    # ---------------------------
+    # 8) Endgame adjustments (convert advantages, push kings to corner if winning)
+    # ---------------------------
+    if is_endgame(board):
+        # king distance: smaller is better (helps forcing mates)
+        wk = board.king(chess.WHITE)
+        bk = board.king(chess.BLACK)
+        if wk is not None and bk is not None:
+            dist = chess.square_distance(wk, bk)
+            score += w["endgame_king_dist_weight"] * (14 - dist)
+
+        # edge bonus: penalize your king being too central when defending; reward pushing enemy king to edge
+        def edge_bonus(sq):
+            f = chess.square_file(sq)
+            r = chess.square_rank(sq)
+            dist_center = min(f, 7 - f) + min(r, 7 - r)
+            return (6 - dist_center) * w["endgame_edge_bonus"]
+
+        score += edge_bonus(board.king(chess.BLACK))  # good to push black king to edge
+        score -= edge_bonus(board.king(chess.WHITE))
+
+        # increase mobility weight in endgame
+        score += w["endgame_mobility_mult"] * (white_mob - black_mob)
+
+    # ---------------------------
+    # 9) Anti-fortress logic (force progress when no captures)
+    # ---------------------------
+    legal_caps_exist = any(board.is_capture(m) for m in board.legal_moves)
+    if not legal_caps_exist:
+        for color, sign in [(chess.WHITE, +1), (chess.BLACK, -1)]:
+            best_rank = 0
+            for sq in board.pieces(chess.PAWN, color):
+                rank = chess.square_rank(sq) if color == chess.WHITE else 7 - chess.square_rank(sq)
+                if rank > best_rank:
+                    best_rank = rank
+            score += sign * (best_rank * w["anti_fortress_pawn_progress"])
+
+    # ---------------------------
+    # 10) Repetition / contempt (tournament exploit)
+    # ---------------------------
     if board.is_repetition():
-        score -= 300  # VERY strong anti-draw term
+        score -= w["repetition_penalty"]
 
-    # =====================================================
-    # 9. TERMINALS
-    # =====================================================
+    score += w["contempt"] if board.turn == chess.WHITE else -w["contempt"]
+
+    # ---------------------------
+    # 11) Terminals
+    # ---------------------------
     if board.is_checkmate():
-        return +999999 if board.turn == chess.BLACK else -999999
+        return w["mate_score"] if board.turn == chess.BLACK else -w["mate_score"]
     if board.is_stalemate():
-        return -200  # forced draws are bad
+        return w["stalemate_score"]
 
-    # =====================================================
-    # 10. CONTEMPT: prefer winning over drawing
-    # =====================================================
-    score += 25 if board.turn == chess.WHITE else -25
+    return score
+
+
+# =========================================================
+# Main evaluator
+# =========================================================
+def REvaluator2(board: chess.Board) -> float:
+    w = WEIGHTS2
+    score = 0.0
+
+    # ---------------------------
+    # 1) Material (compressed values to encourage dynamic play)
+    # ---------------------------
+    piece_values = {
+        chess.PAWN:   w["pawn"],
+        chess.KNIGHT: w["knight"],
+        chess.BISHOP: w["bishop"],
+        chess.ROOK:   w["rook"],
+        chess.QUEEN:  w["queen"],
+        chess.KING:   w["king"],
+    }
+
+    for pt, val in piece_values.items():
+        score += val * (len(board.pieces(pt, chess.WHITE)) - len(board.pieces(pt, chess.BLACK)))
+
+    # ---------------------------
+    # 2) Trade / capture safety (simple, stable)
+    #    We penalize positions where our pieces are attacked proportionally,
+    #    but less extremely than before (keeps engine willing to sacrifice tactically).
+    # ---------------------------
+    for color, sign in [(chess.WHITE, +1), (chess.BLACK, -1)]:
+        opponent = not color
+        for sq in board.pieces(chess.PAWN, color) | board.pieces(chess.KNIGHT, color) | \
+                  board.pieces(chess.BISHOP, color) | board.pieces(chess.ROOK, color) | \
+                  board.pieces(chess.QUEEN, color):
+            # sq is an int; convert to piece
+            piece = board.piece_at(sq)
+            if piece is None:
+                continue
+            base_val = piece_values[piece.piece_type]
+            attackers = board.attackers(opponent, sq)
+            if attackers:
+                worst_trade = -9999
+                for a in attackers:
+                    a_piece = board.piece_at(a)
+                    if a_piece:
+                        trade = piece_values[a_piece.piece_type] - base_val
+                        if trade > worst_trade:
+                            worst_trade = trade
+                # smaller multiplier than before: keeps tactical willingness
+                score += sign * worst_trade * w["trade_penalty_mult"]
+
+    # ---------------------------
+    # 3) Mobility (balanced)
+    # ---------------------------
+    # compute mobility for both sides cleanly without mutating board.turn
+    white_mob = len(list(board.legal_moves_of_color(chess.WHITE))) if hasattr(board, "legal_moves_of_color") else None
+    if white_mob is None:
+        # fallback if python-chess version is older: simulate
+        white_mob = 0
+        for move in board.legal_moves:
+            if board.turn == chess.WHITE:
+                white_mob += 1
+        # less precise fallback; but we will compute black_mob using a simple swap
+        # For safety below, we'll compute black_mob similarly.
+
+    # compute black mobility by making a shallow turn-swap (non-mutating approach)
+    # python-chess doesn't provide a direct API to cheaply count black legal moves without changing the board; we use copy
+    board_copy = board.copy()
+    board_copy.turn = not board.turn
+    black_mob = len(list(board_copy.legal_moves))
+
+    score += w["mobility"] * (white_mob - black_mob)
+
+    # ---------------------------
+    # 4) Center control
+    # ---------------------------
+    for sq in (chess.D4, chess.D5, chess.E4, chess.E5):
+        p = board.piece_at(sq)
+        if p:
+            score += w["center"] if p.color == chess.WHITE else -w["center"]
+
+    # ---------------------------
+    # 5) Passed pawns + pawn advancement urgency
+    # ---------------------------
+    for color, sign in [(chess.WHITE, +1), (chess.BLACK, -1)]:
+        for sq in board.pieces(chess.PAWN, color):
+            # pawn rank (encourage pushing)
+            rank = chess.square_rank(sq) if color == chess.WHITE else 7 - chess.square_rank(sq)
+            score += sign * (w["pawn_rank_weight"] * rank)
+            if is_passed_pawn(board, sq, color):
+                score += sign * (w["passed_base"] + w["passed_per_rank"] * rank)
+
+    # ---------------------------
+    # 6) King safety (midgame) but allow activity in endgame
+    # ---------------------------
+    score += king_safety_eval(board, chess.WHITE, w)
+    score -= king_safety_eval(board, chess.BLACK, w)
+
+    # ---------------------------
+    # 7) Check penalty (keeps engine from walking into checks)
+    # ---------------------------
+    if board.is_check():
+        # penalty for side to move being in check
+        if board.turn == chess.WHITE:
+            score -= w["check_penalty"]
+        else:
+            score += w["check_penalty"]
+
+    # ---------------------------
+    # 8) Endgame adjustments (convert advantages, push kings to corner if winning)
+    # ---------------------------
+    if is_endgame(board):
+        # king distance: smaller is better (helps forcing mates)
+        wk = board.king(chess.WHITE)
+        bk = board.king(chess.BLACK)
+        if wk is not None and bk is not None:
+            dist = chess.square_distance(wk, bk)
+            score += w["endgame_king_dist_weight"] * (14 - dist)
+
+        # edge bonus: penalize your king being too central when defending; reward pushing enemy king to edge
+        def edge_bonus(sq):
+            f = chess.square_file(sq)
+            r = chess.square_rank(sq)
+            dist_center = min(f, 7 - f) + min(r, 7 - r)
+            return (6 - dist_center) * w["endgame_edge_bonus"]
+
+        score += edge_bonus(board.king(chess.BLACK))  # good to push black king to edge
+        score -= edge_bonus(board.king(chess.WHITE))
+
+        # increase mobility weight in endgame
+        score += w["endgame_mobility_mult"] * (white_mob - black_mob)
+
+    # ---------------------------
+    # 9) Anti-fortress logic (force progress when no captures)
+    # ---------------------------
+    legal_caps_exist = any(board.is_capture(m) for m in board.legal_moves)
+    if not legal_caps_exist:
+        for color, sign in [(chess.WHITE, +1), (chess.BLACK, -1)]:
+            best_rank = 0
+            for sq in board.pieces(chess.PAWN, color):
+                rank = chess.square_rank(sq) if color == chess.WHITE else 7 - chess.square_rank(sq)
+                if rank > best_rank:
+                    best_rank = rank
+            score += sign * (best_rank * w["anti_fortress_pawn_progress"])
+
+    # ---------------------------
+    # 10) Repetition / contempt (tournament exploit)
+    # ---------------------------
+    if board.is_repetition():
+        score -= w["repetition_penalty"]
+
+    score += w["contempt"] if board.turn == chess.WHITE else -w["contempt"]
+
+    # ---------------------------
+    # 11) Terminals
+    # ---------------------------
+    if board.is_checkmate():
+        return w["mate_score"] if board.turn == chess.BLACK else -w["mate_score"]
+    if board.is_stalemate():
+        return w["stalemate_score"]
 
     return score
