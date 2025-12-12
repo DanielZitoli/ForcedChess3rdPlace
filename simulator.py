@@ -5,21 +5,52 @@ import chess
 Functions for simulating engine vs engine tournaments
 """
 
-def simulateGame(engineA: ChessEngine, engineB: ChessEngine, debug = False):
-  board = chess.Board()
-  numMoves = 0
-  while not board.is_game_over():
-    move = engineA.find_best_move(board)
-    board.push(move)
-    if board.is_game_over():
-      break
-    move = engineB.find_best_move(board)
-    board.push(move)
-    numMoves += 1
+def simulateGame(engineA: ChessEngine, engineB: ChessEngine, debug=False):
+    import time
+    board = chess.Board()
+    numMoves = 0
 
-  print(board, "\n") 
-  
-  return board.result()
+    # Each engine gets 60 seconds total
+    timeA = 0.0
+    timeB = 0.0
+    time_budget = 60.0
+
+    # Optional: per-move timeout to prevent freezing
+    per_move_time_limit = 2.0
+
+    while not board.is_game_over():
+        # ----- ENGINE A MOVE -----
+        start = time.time()
+        move = engineA.find_best_move(board, time_limit=per_move_time_limit)
+        timeA += time.time() - start
+
+        if timeA > time_budget:
+            if debug:
+                print("Engine A flagged for time.")
+            return "0-1"   # Engine A loses on time → Black wins
+
+        board.push(move)
+        if board.is_game_over():
+            break
+
+        # ----- ENGINE B MOVE -----
+        start = time.time()
+        move = engineB.find_best_move(board, time_limit=per_move_time_limit)
+        timeB += time.time() - start
+
+        if timeB > time_budget:
+            if debug:
+                print("Engine B flagged for time.")
+            return "1-0"   # Engine B loses on time → White wins
+
+        board.push(move)
+        numMoves += 1
+
+    if debug:
+        print(board, "\n")
+        print(f"Final time: A={timeA:.2f}s, B={timeB:.2f}s")
+
+    return board.result()
 
 def simulateTournament(engineA: ChessEngine, engineB: ChessEngine, n: int = 10):
   """

@@ -8,6 +8,6 @@ chatEngine = MinimaxEngine(name="Chat evaluator engine", use_alphabeta=True, eva
 simpleMinimax = MinimaxEngine(name="Simple minimax", use_alphabeta=False, evaluator=materialEvaluator)
 alphaBetaMinimax = MinimaxEngine(name="Minimax with alpha-beta pruning", use_alphabeta=True, evaluator=materialEvaluator)
 
-simulateGame(randomEngine, alphaBetaMinimax)
-simulateGame(randomEngine, simpleMinimax)
-simulateTournament(chatEngine, alphaBetaMinimax, n=5)
+#simulateGame(randomEngine, alphaBetaMinimax)
+#simulateGame(randomEngine, simpleMinimax)
+simulateTournament(chatEngine, alphaBetaMinimax, n=1)

@@ -2,6 +2,7 @@ import chess
 from engine import ChessEngine
 import math
 from helpers import forcedCaptureLegalMoves
+import time
 
 # Next Steps:
 # - develop good evaluators
@@ -16,8 +17,12 @@ class MinimaxEngine(ChessEngine):
         self.max_depth = max_depth
         self.evaluator = evaluator
 
-    def find_best_move(self, board: chess.Board, max_depth=None, time_limit=None) -> chess.Move:
+    def find_best_move(self, board: chess.Board, max_depth=None, time_limit=1.0) -> chess.Move:
         depth = max_depth or self.max_depth
+
+        start_time = time.time()
+        deadline = start_time + time_limit
+
         best_move = None
         best_value = -math.inf if board.turn == chess.WHITE else math.inf
 
@@ -26,6 +31,8 @@ class MinimaxEngine(ChessEngine):
             moves = list(board.legal_moves)
 
         for move in moves:
+            if time.time() >= deadline:
+                break
             board.push(move)
             if self.use_alphabeta:
                 value = self._alphabeta(board, depth - 1, -math.inf, math.inf, not board.turn)
@@ -37,6 +44,9 @@ class MinimaxEngine(ChessEngine):
                 best_value, best_move = value, move
             elif board.turn == chess.BLACK and value < best_value:
                 best_value, best_move = value, move
+
+            if time.time() >= deadline:
+                break
 
         return best_move
 
