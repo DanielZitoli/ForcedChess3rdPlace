@@ -3,12 +3,14 @@ Repository for CO456 Final Project. Implements a Forced Chess variant with XBoar
 
 
 Perform once to set up virtual environment:
-python3 -m venv venv
+    python3 -m venv venv
 
 Then to activate it:
-MAC: source venv/bin/activate
-Windows: .\venv\Scripts\Activate.ps1
+    MAC: source venv/bin/activate
+    Windows: .\venv\Scripts\Activate.ps1
 
-pip install python-chess
+    pip install python-chess
 
-brew install xboard
+    brew install xboard
+
+Our engine file: run_xboard.py

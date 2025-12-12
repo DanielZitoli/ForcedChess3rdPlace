@@ -65,7 +65,13 @@ class XBoardHandler:
             return
 
         elif cmd.startswith("protover"):
-            print_flush("feature usermove=1 sigint=0 sigterm=0 done=1")
+            print_flush(
+                'feature myname="ForcedCaptureEngine" '
+                'usermove=1 '
+                'setboard=1 '
+                'san=0 '
+                'sigint=0 sigterm=0 done=1'
+            )
             return
 
         # ---------------------------
@@ -86,6 +92,15 @@ class XBoardHandler:
 
         elif cmd in ("quit", "exit"):
             sys.exit(0)
+
+        elif cmd == "random":
+            return
+        elif cmd.startswith("level"):
+            return
+        elif cmd == "post":
+            return
+        elif cmd == "hard":
+            return
 
         # ---------------------------
         # TIME COMMANDS IGNORED (safe)
