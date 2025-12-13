@@ -11,5 +11,5 @@ alphaBetaMinimax = MinimaxEngine(name="Minimax with alpha-beta pruning", use_alp
 
 #simulateGame(randomEngine, alphaBetaMinimax)
 #simulateGame(randomEngine, simpleMinimax)
-simulateTournament(chatEngine2, chatEngine, n=1)
-simulateTournament(chatEngine, chatEngine2, n=1)
+simulateTournament(ReEngine2, ReEngine, n=1)
+simulateTournament(ReEngine, ReEngine2, n=1)

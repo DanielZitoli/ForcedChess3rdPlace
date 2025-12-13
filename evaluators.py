@@ -195,7 +195,7 @@ def king_safety_eval(board: chess.Board, color: bool, weights) -> float:
 # Main evaluator
 # =========================================================
 def REvaluator(board: chess.Board) -> float:
-    w = WEIGHTS
+    w = WEIGHTS1
     score = 0.0
 
     # ---------------------------
