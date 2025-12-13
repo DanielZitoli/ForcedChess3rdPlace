@@ -14,6 +14,10 @@ class XBoardHandler:
         self.engine = engine
         self.force_mode = False
 
+        # Time control
+        self.time_left = 0
+        self.move_number = 0
+
     # -----------------------------------------
     # Extract move from noisy XBoard input
     # -----------------------------------------
@@ -103,9 +107,14 @@ class XBoardHandler:
             return
 
         # ---------------------------
-        # TIME COMMANDS IGNORED (safe)
+        # TIME COMMANDS
         # ---------------------------
-        elif cmd.startswith("time") or cmd.startswith("otim"):
+        elif cmd.startswith("time"):
+            #store time in seconds, xboard gives time in centiseconds
+            self.time_left = int(cmd.split()[1]) / 100
+            return
+        
+        elif cmd.startswith("otim"):
             return
 
         # ---------------------------
@@ -116,17 +125,32 @@ class XBoardHandler:
 
         # If nothing else matches → ignore silently (XBoard standard)
         return
+    
+
+    def calculateTimeLimit(self):
+        moves_left = max(10, 40 - self.move_number)
+        base = 0.6 * self.time_left / moves_left
+        move_time = min(base, 0.10 * self.time_left)
+        move_time = min(move_time, 2.0)
+
+        if (self.time_left < 5):
+            move_time = 0.1
+        
+        return move_time
+
 
     # -----------------------------------------
     # Make engine move safely
     # -----------------------------------------
     def make_engine_move(self):
-        best = self.engine.find_best_move(self.board)
+        time_limit = self.calculateTimeLimit()
+        best = self.engine.find_best_move(self.board, time_limit=time_limit)
 
         if not best:
             print_flush("resign")
             return
-
+        
+        self.move_number += 1
         self.board.push(best)
         print_flush(f"move {best.uci()}")
 
