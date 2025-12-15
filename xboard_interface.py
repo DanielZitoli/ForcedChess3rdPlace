@@ -70,7 +70,7 @@ class XBoardHandler:
 
         elif cmd.startswith("protover"):
             print_flush(
-                'feature myname="ForcedCaptureEngine" '
+                'feature myname="ThirdPlace" '
                 'usermove=1 '
                 'setboard=1 '
                 'san=0 '

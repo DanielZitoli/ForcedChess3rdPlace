@@ -2,7 +2,9 @@
 Repository for CO456 Final Project. Implements a Forced Chess variant with XBoard interface.
 
 
-Perform once to set up virtual environment:
+Set Up Instructions:
+
+In the terminal, in the directory ForcedChess3rdPlace
     python3 -m venv venv
 
 Then to activate it:
@@ -10,7 +12,6 @@ Then to activate it:
     Windows: .\venv\Scripts\Activate.ps1
 
     pip install python-chess
-
     brew install xboard
 
-Our engine file: run_xboard.py
+To run the engine in xboard, run the file third_place.py
