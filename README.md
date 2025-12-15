@@ -5,10 +5,13 @@ Repository for CO456 Final Project. Implements a Forced Chess variant with XBoar
 Set Up Instructions:
 
 In the terminal, in the directory ForcedChess3rdPlace
+
     python3 -m venv venv
 
 Then to activate it:
+
     MAC: source venv/bin/activate
+
     Windows: .\venv\Scripts\Activate.ps1
 
     pip install python-chess
