@@ -1,6 +1,13 @@
 # ForcedChess3rdPlace
 Repository for CO456 Final Project. Implements a Forced Chess variant with XBoard interface.
 
+By:
+
+- Daniel Zitoli (dzitoli, 21010776)
+
+- Ramona Dirks (rrdirks, 21000732)
+
+- William Xiao (w3xiao, 21002267)
 
 Set Up Instructions:
 
